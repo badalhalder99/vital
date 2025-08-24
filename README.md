@@ -6,7 +6,7 @@ A powerful web application that allows multiple businesses (tenants) to use the 
 
 # How to run the project on your local machine:
 ```
-git clone https://github.com/badalhalder99/sass.git
+git clone https://github.com/badalhalder99/vital.git
 cd "VITAL - Copy"
 ```
 
