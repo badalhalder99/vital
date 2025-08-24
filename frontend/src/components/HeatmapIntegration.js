@@ -11,17 +11,21 @@ const HeatmapIntegration = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [visitorData, setVisitorData] = useState([]);
+  const [dataCount, setDataCount] = useState({ database: 0, localStorage: 0 });
   const heatmapContainerRef = useRef(null);
   const heatmapInstanceRef = useRef(null);
 
   useEffect(() => {
     loadAllScreenshots();
     loadVisitorData();
+    loadDataCount();
 
     // Migrate localStorage data to MongoDB on component mount
     const migrateData = async () => {
       try {
         await heatmapService.migrateLocalStorageData();
+        // Refresh data count after migration
+        loadDataCount();
       } catch (error) {
         console.warn('Migration failed:', error);
       }
@@ -84,6 +88,26 @@ const HeatmapIntegration = () => {
       console.log('📊 Loaded visitor data from localStorage fallback:', visitors.length, 'visits');
     } catch (err) {
       console.error('Error loading visitor data:', err);
+    }
+  };
+
+  const loadDataCount = async () => {
+    try {
+      // Get database count
+      const dbCount = await heatmapService.getDatabaseDataCount();
+      
+      // Get localStorage count
+      const localCount = heatmapService.getLocalDataCount();
+      
+      setDataCount({
+        database: dbCount.count,
+        localStorage: localCount
+      });
+      
+      console.log(`📊 Data counts - Database: ${dbCount.count}, LocalStorage: ${localCount}`);
+    } catch (error) {
+      console.warn('Failed to load data counts:', error);
+      setDataCount({ database: 0, localStorage: 0 });
     }
   };
 
@@ -282,38 +306,59 @@ const HeatmapIntegration = () => {
     }
   };
 
-  const clearAllData = () => {
-    if (window.confirm('Are you sure you want to clear all screenshots, heatmap data, and visitor information?')) {
-      // Clear screenshots
-      screenshotService.clearAllScreenshots();
+  const clearAllData = async () => {
+    const confirmMessage = `Are you sure you want to completely reset ALL heatmap data?
 
-      // Clear visitor data from both database and localStorage
+This will:
+• Delete ALL heatmap records from MongoDB database
+• Clear ALL localStorage heatmap data  
+• Clear ALL screenshots
+• Reset ALL guest user tracking data
+• Clear ALL visitor information
+
+This action cannot be undone!`;
+
+    if (window.confirm(confirmMessage)) {
+      setLoading(true);
+      setError(null);
+      
       try {
-        // Note: In a production app, you'd want a proper API endpoint to clear data
-        // For now, we'll just clear localStorage and let new data flow to database
-        console.log('🗑️ Clearing visitor data...');
+        console.log('🔄 Starting complete data reset...');
+        
+        // Get current data counts
+        const dbCount = await heatmapService.getDatabaseDataCount();
+        const localCount = heatmapService.getLocalDataCount();
+        
+        console.log(`📊 Current data - Database: ${dbCount.count} records, LocalStorage: ${localCount} entries`);
+        
+        // Clear all heatmap data (database + localStorage + guest data)
+        const resetResult = await heatmapService.resetAllHeatmapData();
+        
+        // Clear screenshots
+        screenshotService.clearAllScreenshots();
+        
+        // Reset component state
+        setScreenshots([]);
+        setSelectedScreenshot(null);
+        setHeatmapData(null);
+        setVisitorData([]);
+        clearHeatmapOverlay();
+        
+        // Refresh data counts to show 0
+        await loadDataCount();
+        
+        // Show success message
+        alert(`✅ Complete reset successful!\n\n${resetResult.message}\n\nAll heatmap data has been reset to 0.`);
+        
+        console.log('✅ Complete data reset finished:', resetResult);
+        
       } catch (error) {
-        console.warn('Failed to clear visitor data from database:', error);
+        console.error('❌ Data reset failed:', error);
+        setError(`Failed to reset data: ${error.message}`);
+        alert(`❌ Reset failed: ${error.message}`);
+      } finally {
+        setLoading(false);
       }
-
-      // Clear localStorage fallback data
-      const keysToRemove = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('visitor_')) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-
-      // Reset state
-      setScreenshots([]);
-      setSelectedScreenshot(null);
-      setHeatmapData(null);
-      setVisitorData([]);
-      clearHeatmapOverlay();
-
-      console.log('🗑️ Cleared all data including visitor information');
     }
   };
 
@@ -339,6 +384,41 @@ const HeatmapIntegration = () => {
         marginBottom: '20px'
       }}>
         <h4 style={{fontWeight: 500}}>Controls Heatmap From Here:</h4>
+        
+        {/* Data Count Display */}
+        <div style={{
+          backgroundColor: '#fff',
+          border: '1px solid #dee2e6',
+          borderRadius: '6px',
+          padding: '12px',
+          marginTop: '10px',
+          marginBottom: '15px',
+          fontSize: '14px'
+        }}>
+          <strong>📊 Current Data:</strong>
+          <div style={{ marginTop: '5px', color: '#6c757d' }}>
+            🗄️ Database: <strong>{dataCount.database}</strong> heatmap records
+            <br />
+            💾 LocalStorage: <strong>{dataCount.localStorage}</strong> entries
+            <br />
+            👥 Visitors: <strong>{visitorData.length}</strong> tracked visits
+          </div>
+          <button
+            onClick={loadDataCount}
+            style={{
+              padding: '4px 8px',
+              backgroundColor: '#6c757d',
+              color: 'white',
+              border: 'none',
+              borderRadius: '3px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              marginTop: '8px'
+            }}
+          >
+            🔄 Refresh Count
+          </button>
+        </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center',marginTop: '10px' }}>
           <button
             onClick={loadHeatmapForScreenshot}
@@ -369,6 +449,28 @@ const HeatmapIntegration = () => {
             }}
           >
             🗑️ Clear All Data
+          </button>
+
+          <button
+            onClick={async () => {
+              if (window.confirm('Reset guest tracking data? This will clear existing guest visit counts and start fresh.')) {
+                heatmapService.resetCorruptedGuestData();
+                await loadVisitorData(); // Refresh visitor data
+                await loadDataCount(); // Refresh data count
+                alert('Guest data reset complete! Visit count will increment on page reloads or after 5+ minute gaps between interactions.');
+              }
+            }}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#ffc107',
+              color: 'black',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            🔄 Reset Guest Data
           </button>
 
           <button
@@ -524,10 +626,9 @@ const HeatmapIntegration = () => {
                     display: 'block',
                   }}
                   onLoad={() => {
-                    // Load and display heatmap for this page
-                    if (selectedScreenshot) {
-                      loadHeatmapForScreenshot();
-                    }
+                    // Only load heatmap data, don't track page visits
+                    // This is just displaying a screenshot, not an actual page visit
+                    console.log('📸 Screenshot image loaded, displaying heatmap overlay');
                   }}
                 />
 
