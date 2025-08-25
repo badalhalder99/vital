@@ -3,6 +3,7 @@ import screenshotService from '../services/screenshotService';
 import heatmapService from '../services/heatmapService';
 import api from '../services/api';
 import h337 from 'heatmapjs';
+import VideoPlayerDemo from './VideoPlayerDemo';
 
 const HeatmapIntegration = () => {
   const [screenshots, setScreenshots] = useState([]);
@@ -499,6 +500,7 @@ This action cannot be undone!`;
                   const heatmapData = await heatmapService.loadHeatmapData(selectedScreenshot.url);
 
                   if (heatmapData && heatmapData.data && heatmapData.data.length > 0) {
+                    setHeatmapData(heatmapData); // Save to state for VideoPlayerDemo
                     showGreenDots(heatmapData);
                     setError(null);
                     console.log(`✅ Displaying ${heatmapData.data.length} interaction points from database`);
@@ -508,6 +510,7 @@ This action cannot be undone!`;
                     if (localData && localData.length > 0) {
                       console.log('📦 Found localStorage data, using as fallback...');
                       const data = { data: localData };
+                      setHeatmapData(data); // Save to state for VideoPlayerDemo
                       showGreenDots(data);
                       setError(null);
                       console.log(`✅ Displaying ${localData.length} interaction points from localStorage`);
@@ -695,6 +698,26 @@ This action cannot be undone!`;
             <div>Visit some pages on your website to automatically capture screenshots for heatmap analysis.</div>
           </div>
         )}
+      </div>
+
+      {/* Video Playing Section */}
+      <div style={{
+        backgroundColor: '#e3f2fd',
+        border: '1px solid #2196f3',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBottom: '20px'
+      }}>
+        <h3>🎥 Video Playing Section - Heatmap Integration Demo</h3>
+        <p style={{ marginBottom: '15px', marginTop: '10px', color: '#1976d2' }}>
+          Watch how users interact with your page step by step with live heatmap visualization
+        </p>
+        
+        <VideoPlayerDemo 
+          selectedScreenshot={selectedScreenshot} 
+          heatmapData={heatmapData}
+          onShowHeatmap={showGreenDots}
+        />
       </div>
 
       {/* Visitor Analytics Section */}
