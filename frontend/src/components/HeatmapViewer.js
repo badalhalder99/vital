@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import  { useState, useEffect, useRef } from 'react';
 import heatmapService from '../services/heatmapService';
 
 const HeatmapViewer = ({ page, dateRange, tenantId, className = '' }) => {
@@ -61,8 +61,8 @@ const HeatmapViewer = ({ page, dateRange, tenantId, className = '' }) => {
   return (
     <div className={`heatmap-viewer ${className}`}>
       <div className="heatmap-controls" style={{ marginBottom: '10px' }}>
-        <button 
-          onClick={refreshHeatmap} 
+        <button
+          onClick={refreshHeatmap}
           disabled={loading}
           style={{
             padding: '8px 16px',
@@ -76,8 +76,8 @@ const HeatmapViewer = ({ page, dateRange, tenantId, className = '' }) => {
         >
           {loading ? 'Loading...' : 'Refresh Heatmap'}
         </button>
-        
-        <button 
+
+        <button
           onClick={clearHeatmap}
           style={{
             padding: '8px 16px',
@@ -111,7 +111,7 @@ const HeatmapViewer = ({ page, dateRange, tenantId, className = '' }) => {
         </div>
       )}
 
-      <div 
+      <div
         ref={containerRef}
         className="heatmap-container"
         style={{

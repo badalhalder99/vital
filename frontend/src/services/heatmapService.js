@@ -156,28 +156,28 @@ class HeatmapService {
       platform: navigator.platform,
       userAgent: navigator.userAgent.replace(/Chrome\/[\d\.]+/g, 'Chrome').replace(/Firefox\/[\d\.]+/g, 'Firefox') // Remove version numbers
     };
-    
+
     // Sort keys to ensure consistent ordering
     const sortedKeys = Object.keys(stableFingerprint).sort();
     const sortedFingerprint = {};
     sortedKeys.forEach(key => {
       sortedFingerprint[key] = stableFingerprint[key];
     });
-    
+
     // Create a simple hash of the fingerprint
     const fingerprintString = JSON.stringify(sortedFingerprint);
     let hash = 5381; // Use djb2 hash algorithm for better consistency
     for (let i = 0; i < fingerprintString.length; i++) {
       hash = ((hash << 5) + hash) + fingerprintString.charCodeAt(i);
     }
-    
+
     const hashString = Math.abs(hash).toString(36).substring(0, 8); // Consistent length
-    console.log('🔍 Stable fingerprint:', { 
-      data: sortedFingerprint, 
-      string: fingerprintString,
-      hash: hashString 
-    });
-    
+    // console.log('🔍 Stable fingerprint:', {
+    //   data: sortedFingerprint,
+    //   string: fingerprintString,
+    //   hash: hashString
+    // });
+
     return {
       hash: hashString,
       details: sortedFingerprint
@@ -187,32 +187,32 @@ class HeatmapService {
   // Get or create guest user info with fingerprinting (increment based on interaction gaps)
   getGuestUserInfo(isInteraction = false, forceIncrement = false) {
     const fingerprint = this.generateDeviceFingerprint();
-    
+
     // First check if we have a persistent guest ID stored
     const persistentKey = 'persistent_guest_id';
     let persistentGuestId = localStorage.getItem(persistentKey);
-    
+
     // If no persistent ID exists, create one based on fingerprint
     if (!persistentGuestId) {
       persistentGuestId = `guest_${fingerprint.hash}`;
       localStorage.setItem(persistentKey, persistentGuestId);
       console.log('🆕 Created persistent guest ID:', persistentGuestId);
     }
-    
+
     // Use the persistent ID as the guest key (not the current fingerprint)
     const guestKey = `guest_fingerprint_${persistentGuestId.replace('guest_', '')}`;
-    
+
     // Check if we've seen this device/browser combination before
     let guestInfo = JSON.parse(localStorage.getItem(guestKey) || 'null');
     const now = Date.now();
-    
+
     // Clean up old format guest IDs that have timestamps
     if (guestInfo && guestInfo.guestId && guestInfo.guestId.includes('_') && guestInfo.guestId.match(/_\d+$/)) {
       console.log('🧹 Cleaning up old guest ID format:', guestInfo.guestId);
       guestInfo.guestId = persistentGuestId; // Use persistent ID
       localStorage.setItem(guestKey, JSON.stringify(guestInfo));
     }
-    
+
     if (!guestInfo) {
       // This is a new guest user - use the persistent guest ID
       guestInfo = {
@@ -225,7 +225,7 @@ class HeatmapService {
         currentSessionStart: now,
         totalTimeSpent: 0 // in milliseconds
       };
-      
+
       // Initialize current session for first visit
       this.currentSession = {
         visitNumber: 1,
@@ -237,7 +237,7 @@ class HeatmapService {
         interactions: [],
         pages: [this.currentPage || '/']
       };
-      
+
       localStorage.setItem(guestKey, JSON.stringify(guestInfo));
       console.log('🆕 New guest user detected:', guestInfo.guestId, 'Visit count: 1');
     } else {
@@ -245,46 +245,46 @@ class HeatmapService {
       if (!guestInfo.sessionStartTime || isInteraction || forceIncrement) {
         guestInfo.sessionStartTime = now;
       }
-      
+
       // Ensure sessions array exists
       if (!guestInfo.sessions) {
         guestInfo.sessions = [];
       }
-      
+
       // Check if we should start a new visit/session
       const timeSinceLastInteraction = now - (guestInfo.lastInteractionTime || 0);
       const timeSinceLastVisitIncrement = now - this.lastVisitIncrementTime;
-      
+
       // Increment visit count on:
       // 1. Page reload (forceIncrement=true) OR
       // 2. 5+ minute gap between interactions
       // Prevent double increments within 2 seconds
       const timeSinceLastIncrement = now - this.lastIncrementTime;
       const shouldStartNewVisit = (forceIncrement || (isInteraction && timeSinceLastInteraction > this.interactionGapDelay)) && timeSinceLastIncrement > 2000;
-      
+
       if (shouldStartNewVisit && this.currentSession.startTime) {
         this.lastIncrementTime = now;
         // End current session and get its data
         const sessionResult = this.endCurrentSession();
-        
+
         if (sessionResult) {
           // Add completed session to returnVisits (this was the previous visit)
           if (!guestInfo.returnVisits) {
             guestInfo.returnVisits = [];
           }
           guestInfo.returnVisits.push(sessionResult.sessionArray);
-          
+
           // Update total time spent
           guestInfo.totalTimeSpent = (guestInfo.totalTimeSpent || 0) + sessionResult.sessionDuration;
         }
-        
+
         // Increment visit count (starting new visit)
         if (!window.incrementCounter) window.incrementCounter = 0;
         window.incrementCounter++;
         console.log(`🚨 INCREMENT #${window.incrementCounter}: ${guestInfo.visitCount} -> ${guestInfo.visitCount + 1}`);
         guestInfo.visitCount += 1;
         guestInfo.currentSessionStart = now;
-        
+
         // Start new session
         this.currentSession = {
           visitNumber: guestInfo.visitCount,
@@ -297,10 +297,10 @@ class HeatmapService {
           pages: [this.currentPage || '/']
         };
     this.lastPageVisitCall = 0;
-        
+
         const reason = forceIncrement ? 'page reload' : `${Math.round(timeSinceLastInteraction / 60000)} min gap`;
         console.log(`📍 Visit #${guestInfo.visitCount} (${reason})`);
-        
+
         // Store updated visit count in database
         this.saveVisitCountToDatabase(guestInfo);
       } else {
@@ -309,14 +309,14 @@ class HeatmapService {
           this.currentSession.pages.push(this.currentPage);
         }
       }
-      
+
       // Always update last interaction time if it's an interaction
       if (isInteraction || forceIncrement) {
         guestInfo.lastInteractionTime = now;
         localStorage.setItem(guestKey, JSON.stringify(guestInfo));
       }
     }
-    
+
     this.currentGuestId = guestInfo.guestId;
     return guestInfo;
   }
@@ -324,7 +324,7 @@ class HeatmapService {
   // Get user information (with interaction tracking)
   getUserInfo(isInteraction = false, forceIncrement = false) {
     const user = JSON.parse(localStorage.getItem('user') || 'null');
-    
+
     // If user is authenticated, use their actual info
     if (user && user._id) {
       return {
@@ -336,14 +336,14 @@ class HeatmapService {
         guestInfo: null
       };
     }
-    
+
     // For guest users, use fingerprint-based identification
     const guestInfo = this.getGuestUserInfo(isInteraction, forceIncrement);
-    
+
     // Calculate current session duration
-    const currentSessionDuration = guestInfo.currentSessionStart ? 
+    const currentSessionDuration = guestInfo.currentSessionStart ?
       Date.now() - guestInfo.currentSessionStart : 0;
-    
+
     return {
       userId: guestInfo.guestId,
       userRole: 'guest',
@@ -378,11 +378,11 @@ class HeatmapService {
       const now = Date.now();
       const sessionDuration = now - this.currentSession.startTime;
       const totalInteractions = this.currentSession.clickCount + this.currentSession.moveCount + this.currentSession.scrollCount;
-      
+
       // Create session data as array: [startTime, endTime, interactionCount, interactionDetails]
       const sessionArray = [
         new Date(this.currentSession.startTime).toISOString(), // Start time
-        new Date(now).toISOString(), // End time  
+        new Date(now).toISOString(), // End time
         totalInteractions, // Total interaction count
         {
           clickCount: this.currentSession.clickCount,
@@ -393,12 +393,12 @@ class HeatmapService {
           duration: sessionDuration // Session duration in ms
         }
       ];
-      
+
       console.log('⏱️ Session ended:', {
         duration: Math.round(sessionDuration / 1000) + 's',
         interactions: totalInteractions
       });
-      
+
       return { sessionArray, sessionDuration };
     }
     return null;
@@ -436,7 +436,7 @@ class HeatmapService {
   resetCorruptedGuestData() {
     console.log('🔄 Resetting guest data...');
     this.clearGuestData();
-    
+
     // Reset session tracking variables
     this.lastInteractionTime = 0;
     this.lastVisitIncrementTime = 0;
@@ -444,7 +444,7 @@ class HeatmapService {
     this.lastPageVisitCall = 0;
     this.lastPageVisitCall = 0;
     this.sessionId = this.generateSessionId();
-    
+
     console.log('✅ Guest data reset complete - visit count will increment on 5+ min gaps or page reloads');
   }
 
@@ -463,7 +463,7 @@ class HeatmapService {
         device: this.getDeviceInfo(),
         tenantId: null
       };
-      
+
       await api.post('/api/heatmap/track-guest-visit', guestVisitData);
       console.log(`💾 Visit count ${guestInfo.visitCount} stored in database:`, guestInfo.guestId);
     } catch (error) {
@@ -474,7 +474,7 @@ class HeatmapService {
   // Track guest user visit to backend
   async trackGuestVisit(userInfo, pagePath) {
     if (!userInfo.guestInfo) return;
-    
+
     try {
       const guestVisitData = {
         guestId: userInfo.userId,
@@ -488,7 +488,7 @@ class HeatmapService {
         device: this.getDeviceInfo(),
         tenantId: null
       };
-      
+
       await api.post('/api/heatmap/track-guest-visit', guestVisitData);
       console.log(`✓ Guest visit tracked:`, {
         guestId: userInfo.userId,
@@ -503,7 +503,7 @@ class HeatmapService {
   // Track page visit and capture screenshot (force increment on page reload)
   trackPageVisit(pagePath) {
     const now = Date.now();
-    
+
     // Debounce multiple trackPageVisit calls within 2 seconds
     if (!this.lastPageVisitCall) this.lastPageVisitCall = 0;
     const timeSinceLastPageVisit = now - this.lastPageVisitCall;
@@ -511,7 +511,7 @@ class HeatmapService {
       console.log(`🚫 BLOCKED duplicate trackPageVisit for ${pagePath}`);
       return;
     }
-    
+
     this.lastPageVisitCall = now;
     console.log(`✅ ALLOWING trackPageVisit for ${pagePath}`);
     this.currentPage = pagePath;
@@ -520,7 +520,7 @@ class HeatmapService {
 
     // Get user info and force increment visit count for page visits (reloads)
     const userInfo = this.getUserInfo(false, true); // forceIncrement = true for page visits
-    
+
     const visitData = {
       sessionId: this.sessionId,
       eventType: 'page_visit',
@@ -621,7 +621,7 @@ class HeatmapService {
     if (this.currentPage) {
       // End guest session before tracking exit
       this.endGuestSession();
-      
+
       const exitData = {
         sessionId: this.sessionId,
         eventType: 'page_exit',
@@ -658,7 +658,7 @@ class HeatmapService {
   async handleClick(event) {
     // Track click as interaction (may increment if 5+ min gap)
     const userInfo = this.getUserInfo(true, false); // isInteraction = true to check for 5+ min gap
-    
+
     // Track interaction in current session
     this.currentSession.clickCount++;
     this.currentSession.interactions.push({
@@ -676,7 +676,7 @@ class HeatmapService {
       },
       page: this.currentPage
     });
-    
+
     const clickData = {
       sessionId: this.sessionId,
       eventType: 'click',
@@ -727,7 +727,7 @@ class HeatmapService {
   handleMouseMove = this.throttle((event) => {
     // Track mouse move as interaction (may increment if 5+ min gap)
     const userInfo = this.getUserInfo(true, false); // isInteraction = true to check for 5+ min gap
-    
+
     // Track interaction in current session (sample to avoid too many entries)
     if (Math.random() < 0.1) { // Sample 10% of mouse moves
       this.currentSession.moveCount++;
@@ -739,7 +739,7 @@ class HeatmapService {
         page: this.currentPage
       });
     }
-    
+
     const moveData = {
       sessionId: this.sessionId,
       eventType: 'mouse_move',
@@ -780,7 +780,7 @@ class HeatmapService {
   handleScroll = this.throttle(() => {
     // Track scroll as interaction (may increment if 5+ min gap)
     const userInfo = this.getUserInfo(true, false); // isInteraction = true to check for 5+ min gap
-    
+
     // Track interaction in current session
     this.currentSession.scrollCount++;
     this.currentSession.interactions.push({
@@ -790,7 +790,7 @@ class HeatmapService {
       scrollY: window.scrollY,
       page: this.currentPage
     });
-    
+
     const scrollData = {
       sessionId: this.sessionId,
       eventType: 'scroll',
@@ -1020,7 +1020,7 @@ class HeatmapService {
   async clearAllDatabaseData(tenantId = null) {
     try {
       console.log('🗑️ Clearing all heatmap data from MongoDB...');
-      
+
       const response = await api.delete('/api/heatmap/clear-all-data', {
         data: {
           tenantId: tenantId,
@@ -1074,24 +1074,24 @@ class HeatmapService {
   async resetAllHeatmapData(tenantId = null) {
     try {
       console.log('🔄 Starting complete heatmap data reset...');
-      
+
       // Get current counts before clearing
       const dbCount = await this.getDatabaseDataCount(tenantId);
       const localCount = this.getLocalDataCount();
-      
+
       console.log(`📊 Before reset - Database: ${dbCount.count} records, LocalStorage: ${localCount} records`);
 
       // Clear database data
       const dbResult = await this.clearAllDatabaseData(tenantId);
-      
+
       // Clear localStorage data
       this.clearAllTrackingData();
-      
+
       // Clear guest data
       this.clearGuestData();
-      
+
       console.log('✅ Complete data reset successful');
-      
+
       return {
         success: true,
         database: dbResult,
